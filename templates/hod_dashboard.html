@@ -1,0 +1,29 @@
+<h2>HOD Leave Approval</h2>
+
+<table border="1">
+
+<tr>
+    <th>ID</th>
+    <th>From</th>
+    <th>To</th>
+    <th>Reason</th>
+    <th>Status</th>
+    <th>Action</th>
+</tr>
+
+{% for row in data %}
+<tr>
+    <td>{{row[0]}}</td>
+    <td>{{row[2]}}</td>
+    <td>{{row[3]}}</td>
+    <td>{{row[4]}}</td>
+    <td>{{row[5]}}</td>
+
+    <td>
+    <a href="/update_status/{{ row[0] }}/Approved">Approve</a> |
+    <a href="/update_status/{{ row[0] }}/Rejected">Reject</a>
+</td>
+</tr>
+{% endfor %}
+
+</table>
