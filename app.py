@@ -5,7 +5,7 @@ from flask import redirect
 
 app = Flask(__name__)
 
-# -----------------------------
+# -------------------------
 # DB table create function
 # -----------------------------
 def init_db():
