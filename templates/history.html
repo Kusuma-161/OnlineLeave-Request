@@ -10,13 +10,13 @@
     <th>Status</th>
 </tr>
 
-{% for row in data %}
+{% for row in leaves %}
 <tr>
-    <td>{{row[0]}}</td>
-    <td>{{row[2]}}</td>
-    <td>{{row[3]}}</td>
-    <td>{{row[4]}}</td>
-    <td>{{row[5]}}</td>
+    <td>{{ row[0] }}</td>   <!-- id -->
+    <td>{{ row[1] }}</td>   <!-- from_date -->
+    <td>{{ row[2] }}</td>   <!-- to_date -->
+    <td>{{ row[3] }}</td>   <!-- reason -->
+    <td>{{ row[4] }}</td>   <!-- status -->
 </tr>
 {% endfor %}
 
