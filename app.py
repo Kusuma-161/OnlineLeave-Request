@@ -1,20 +1,32 @@
 from flask import Flask, render_template, request, redirect
 import sqlite3
 import smtplib
-from flask import redirect
+import re
 
 app = Flask(__name__)
 
 # -------------------------
 # DB table create function
-# -----------------------------
+# -------------------------
+
 def init_db():
     conn = sqlite3.connect('leave.db')
     cur = conn.cursor()
+
+    # Students table
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS students (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT UNIQUE,
+        password TEXT
+    )
+    ''')
+
+    # Leave table
     cur.execute('''
     CREATE TABLE IF NOT EXISTS leave_requests (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        
         from_date TEXT,
         to_date TEXT,
         reason TEXT,
@@ -22,12 +34,46 @@ def init_db():
         status TEXT
     )
     ''')
+
     conn.commit()
     conn.close()
 
-# Call this function app start avvagane
 init_db()
-# -----------------------------
+
+# ---------------- REGISTER ---------------- #
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+
+    if request.method == 'POST':
+
+        name = request.form['name']
+        email = request.form['email']
+        password = request.form['password']
+
+        # Only college email allowed
+        pattern = r'^\d{12}\.[a-zA-Z]+@gvpcew\.ac\.in$'
+        if not re.match(pattern, email):
+            return "Invalid College Email Format ❌"
+
+        conn = sqlite3.connect('leave.db')
+        cur = conn.cursor()
+
+        try:
+            cur.execute(
+                "INSERT INTO students (name, email, password) VALUES (?, ?, ?)",
+                (name, email, password)
+            )
+            conn.commit()
+        except:
+            return "User already exists ❌"
+
+        conn.close()
+        return redirect('/')
+
+    return render_template('register.html')
+
+
 # ---------------- LOGIN ---------------- #
 
 @app.route('/', methods=['GET', 'POST'])
@@ -47,6 +93,7 @@ def login():
         )
 
         user = cur.fetchone()
+        conn.close()
 
         if user:
             return redirect('/dashboard')
@@ -61,45 +108,51 @@ def login():
 @app.route('/dashboard')
 def dashboard():
     return render_template('dashboard.html')
+
+
+# ---------------- HISTORY ---------------- #
+
+@app.route('/history')
+def history():
+    conn = sqlite3.connect('leave.db')
+    cur = conn.cursor()
+
+    cur.execute("SELECT id, from_date, to_date, reason, status FROM leave_requests")
+    data = cur.fetchall()
+
+    conn.close()
+
+    return render_template('history.html', leaves=data)
+
+
 # ---------------- APPLY LEAVE ---------------- #
 
 @app.route('/apply_leave', methods=['GET', 'POST'])
 def apply_leave():
+
     if request.method == 'POST':
-        
+
         from_date = request.form['from_date']
         to_date = request.form['to_date']
         reason = request.form['reason']
-        email = request.form['email']  # <-- student email
+        email = request.form['email']
 
         conn = sqlite3.connect('leave.db')
         cur = conn.cursor()
 
         cur.execute(
-            "INSERT INTO leave_requests ( from_date, to_date, reason, email, status) VALUES ( ?, ?, ?, ?, ?)",
-            ( from_date, to_date, reason, email, "Pending")
+            "INSERT INTO leave_requests (from_date, to_date, reason, email, status) VALUES (?, ?, ?, ?, ?)",
+            (from_date, to_date, reason, email, "Pending")
         )
 
         conn.commit()
         conn.close()
 
-        return "Leave Applied Successfully!"  # Or redirect to leave history
+        return "Leave Applied Successfully ✅"
 
     return render_template('apply_leave.html')
-       # ---------------- LEAVE HISTORY ---------------- #
 
-@app.route('/history')
-def history():
 
-    conn = sqlite3.connect('leave.db')
-    cur = conn.cursor()
-
-    cur.execute("SELECT * FROM leave_requests")
-    data = cur.fetchall()
-
-    conn.close()
-
-    return render_template('history.html', data=data)
 # ---------------- HOD DASHBOARD ---------------- #
 
 @app.route('/hod')
@@ -114,97 +167,48 @@ def hod():
     conn.close()
 
     return render_template('hod_dashboard.html', data=data)
-# ---------------- APPROVE LEAVE ---------------- #
 
-@app.route('/approve/<int:id>')
-def approve(id):
 
-    conn = sqlite3.connect('leave.db')
-    cur = conn.cursor()
-
-    # Email fetch
-    cur.execute(
-        "SELECT email FROM leave_requests WHERE id=?",
-        (id,)
-    )
-    data = cur.fetchone()
-    receiver_mail = data[0]
-
-    # Status update
-    cur.execute(
-        "UPDATE leave_requests SET status='Approved' WHERE id=?",
-        (id,)
-    )
-
-    conn.commit()
-    conn.close()
-
-    send_email(receiver_mail, "Approved")
-
-    return redirect('/hod')
-# ---------------- REJECT LEAVE ---------------- #
-
-@app.route('/reject/<int:id>')
-def reject(id):
-
-    conn = sqlite3.connect('leave.db')
-    cur = conn.cursor()
-
-    # Email fetch
-    cur.execute(
-        "SELECT email FROM leave_requests WHERE id=?",
-        (id,)
-    )
-    data = cur.fetchone()
-    receiver_mail = data[0]
-
-    # Status update
-    cur.execute(
-        "UPDATE leave_requests SET status='Rejected' WHERE id=?",
-        (id,)
-    )
-
-    conn.commit()
-    conn.close()
-
-    send_email(receiver_mail, "Rejected")
-
-    return redirect('/hod')
-
+# ---------------- UPDATE STATUS ---------------- #
 
 @app.route('/update_status/<int:id>/<status>')
 def update_status(id, status):
+
     conn = sqlite3.connect('leave.db')
     cur = conn.cursor()
 
-    # Fetch student email from DB
     cur.execute("SELECT email FROM leave_requests WHERE id=?", (id,))
     data = cur.fetchone()
-    receiver_mail = data[0] if data and data[0] else None
+    receiver_mail = data[0] if data else None
 
-    # Update leave status
     cur.execute("UPDATE leave_requests SET status=? WHERE id=?", (status, id))
+
     conn.commit()
     conn.close()
 
-    # Send mail only if email exists
     if receiver_mail:
         send_email(receiver_mail, status)
 
     return redirect('/hod')
+
+
+# ---------------- SEND EMAIL ---------------- #
+
 def send_email(receiver_mail, status):
 
     sender = "leaveproject2026@gmail.com"
     password = "utgyfblshelryflg"
 
-    message = f"Your Leave Request is {status}"
+    message = f"Subject: Leave Status Update\n\nYour Leave Request is {status}"
 
     server = smtplib.SMTP('smtp.gmail.com', 587)
     server.starttls()
     server.login(sender, password)
-
     server.sendmail(sender, receiver_mail, message)
     server.quit()
+
+
 # ---------------- RUN APP ---------------- #
 
-app.run(debug=True)
+if __name__ == '__main__':
+    app.run(debug=True)
